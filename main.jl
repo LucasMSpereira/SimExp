@@ -22,7 +22,6 @@ process = open("process.res", "w")
 
 # Gets data from input file as an array of strings
 data = InOut.Extract("Input\\p51_1.dat", process)
-@time begin
 for i in 1:size(data, 1)
 
   if data[i] == "type_2d"
@@ -254,7 +253,8 @@ for i in 1:size(data, 1)
   end
 
 end
-end
+
+
 
 ################################################
 ### LOOP ELEMENTS TO FIND GLOBAL ARRAY SIZES ###
