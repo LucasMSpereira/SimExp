@@ -22,6 +22,7 @@ process = open("process.res", "w")
 
 # Gets data from input file as an array of strings
 data = InOut.Extract("Input\\p51_1.dat", process)
+@time begin
 for i in 1:size(data, 1)
 
   if data[i] == "type_2d"
@@ -253,7 +254,7 @@ for i in 1:size(data, 1)
   end
 
 end
-
+end
 
 ################################################
 ### LOOP ELEMENTS TO FIND GLOBAL ARRAY SIZES ###
@@ -472,7 +473,7 @@ end
 #####################################
 
 println("Beginning of graphics procedures")
-steps = 2100
+steps = 2000
 deformScale = 2.5e5
 window, ProgramID = graph.openGLSetup(nxe, nye, coord, g_num, "Shaders\\SimExpVertex.vs", "Shaders\\SimExpFragment.fs", nodof, disp, nf)
 graph.renderLoop(steps, ProgramID, window, deformScale)
