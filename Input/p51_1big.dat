@@ -1,0 +1,26 @@
+cg_limit 0
+GPU 0
+type_2d plane
+element triangle
+dir x
+nxe 9
+cg_tol 0
+nye 9
+nip 1
+np_types 1
+young 1.0e6
+poisson 0.3
+x_coords
+0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0
+y_coords
+0.0 -1.0 -2.0 -3.0 -4.0 -5.0 -6.0 -7.0 -8.0 -9.0
+nodof 2
+nod 3
+nr 5
+nf
+1 0 1  4 0 1  7 0 0  8 1 0  9 1 0
+etype 0
+loaded_nodes 3
+disp
+1  0.0 -0.25   2  0.0 -0.50   3  0.0 -0.25
+fixed_freedoms 0
