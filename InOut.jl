@@ -1,16 +1,13 @@
 module InOut
 
-using Printf
-
+using Printf, Statistics
 
 
 ### This module provides IO routines
 
-function Extract(file, process)
+function Extract(file)
 
     # Returns single array containing strings with the data in input file
-
-    write(process, "InOut.Extract\n")
 
     data = String[]
     open(file) do input
@@ -27,16 +24,20 @@ function Extract(file, process)
         end
         
     end
-
+    println("InOut.Extract: length(data) = $(length(data))")
     return data
     
 end
 
-function DispOut(output, type_2d, disp, nf, nn, nodof, process)
+function neqStorageOut(neq, store, output)
+    # Output number of equations and skyline storage
+    write(output, "There are $neq equations and the skyline storage is $store.\n")
+end
+
+function DispOut(output, type_2d, disp, nf, nn, nodof)
 
     # Outputs displacements
 
-    write(process, "\nInOut.DispOut\n")
 
     if nodof == 2
 
@@ -52,7 +53,7 @@ function DispOut(output, type_2d, disp, nf, nn, nodof, process)
 
     elseif nodof == 3
 
-        @printf output "Node\tx-disp\t\t\ty-disp\t\t\tz-disp\n\n"
+        @printf output "\nNode\tx-disp\t\t\ty-disp\t\t\tz-disp\n\n"
 
     else
 
@@ -97,17 +98,16 @@ function printArray(variable, varName)
     
 end
 
-function StressOut(iel, gc, sigma, i, nip, process, output)
+function StressOut(iel, gc, sigma, i, nip, output)
 
     # Outputs Stress values
 
-    write(process, "\nInOut.StressOut\n")
     @printf output "\t\t%i\t\t\t\t%i\t\t%i" iel i gc[1]
 
     for mm in 1:size(sigma, 1)
 
         @printf output "\t\t%.4e" sigma[mm]
-        mm == size(sigma, 1) ? (@printf output "\n") : false
+        mm == size(sigma, 1) && (@printf output "\n")
         
     end
 
@@ -115,11 +115,9 @@ function StressOut(iel, gc, sigma, i, nip, process, output)
     
 end
 
-function HeaderStress(type_2d, nodof, process, output)
+function HeaderStress(type_2d, nodof, output)
 
     # Outputs header of stress table
-
-    write(process, "\nInOut.HeaderStress\n")    
 
     if nodof == 2
 
@@ -141,5 +139,69 @@ function HeaderStress(type_2d, nodof, process, output)
     
 end
 
+function bandwidthOut(nband, output)
+    # Outputs bandwidth
+    write(output, "\nThe half-bandwidth (including diagonal) is $(nband+1).\n")
+end
+
+function EigenValOut(diag, output)
+    write(output, "The eigenvalues are: ")
+    for i = 1:length(diag)
+      @printf output "%.4e  " diag[i]
+    end
+    @printf output "\n"
+
+end
+
+function EigenVecOut(i, udiag, output)
+    write(output, "Eigenvector number $i is: ")
+    m = maximum(abs.(udiag))
+    for j = 1:length(udiag)
+        @printf output "%.4e  " udiag[j]/m
+    end
+    @printf output "\n"
+end
+
+function fillInDisp(data, neq, cg_limit, nodof, loaded_nodes, nf, loadedNodes_pos)
+    # disp initially stores applied loads
+    loads = zeros(neq, cg_limit + 1)
+    
+    for vv in 1:(nodof + 1):(loaded_nodes*(nodof + 1))
+        
+        for j in 1:size(nf, 1)
+            
+            if nf[j, parse(Int64, data[loadedNodes_pos + vv])] != 0
+                
+                global loads[nf[j, parse(Int64, data[loadedNodes_pos + vv])], 1] = parse(Float64, data[loadedNodes_pos + vv + j])
+                
+            end
+            
+        end
+        
+    end
+    return loads
+end
+
+function vonMisesOut(vm, iel, nxe, output)
+    if iel == 1
+        write(output, "\nvon Mises stress at centroid of elements:\n")
+        write(output, "Element\t\tStress\n")
+    end
+    @printf output "%0.4e " vm
+    iel%nxe==0 && @printf output "\n"
+end
+
+function megaPrint(vec,vecName;values=false, percentage=5)
+    #=
+    Debuggin aid. Prints:
+        a certain percentage of random elements of a vector
+        the vector's standard deviation
+        the vector's mean
+    =#
+    println(vecName)
+    values == true && (println(vec[rand(1:length(vec),floor(Int32,length(vec)*percentage/100))]))
+    println("mean: $(mean(vec))")
+    println("std: $(std(vec))")
+end
 
 end

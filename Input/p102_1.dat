@@ -1,0 +1,25 @@
+element quadrilateral
+nodof 2
+penalty 1.0e20
+nod 4
+fixed_freedoms 0
+nip 1
+nxe 5
+nye 1
+nod 4
+np_types 1
+nprops 3
+1.0
+0.0
+1.0
+spacing 0.8 1.0
+nr 2
+nf
+1 0 0  2 0 0
+nmodes 5
+cg_limit 0
+type_2d plane
+cg_tol 0
+etol 1e-30
+GPU false
+probType eigen

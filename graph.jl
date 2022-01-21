@@ -2,7 +2,7 @@ module graph
 
 using Base: Float32
 import GLFW
-using ModernGL, LinearAlgebra, Printf
+using ModernGL, LinearAlgebra, Printf, InOut, num, Statistics
 include("utilities.jl")
 
     ### This module provides graphics processing routines
@@ -108,8 +108,10 @@ function ProgramSetup(vsh, fsh)
 
     # Create a "program" to connect both shaders
     program = createShaderProgram(vertexShader, fragmentShader)
+
+    glUseProgram(program)
         
-    return program
+    return program, vertexShader, fragmentShader
         
 end
 
@@ -189,45 +191,55 @@ function vMatrix()
     
 end
 
-function openGLSetup(nxe, nye, coords, g_num, vertexShader, fragmentShader, nodof, disp, nf)
+function glSetupDisp(element, nod, nxe, nye, coords, g_num, vertexShader, fragmentShader, nodof, disp, nf, coordScale)
     
     # Many setup steps for OpenGL
-
+    
     vertices = Array{GLfloat}(undef, (nxe + 1)*(nye + 1)*4)
     indices = Array{GLuint}(undef, 3*2*nxe*nye)
+    coords *= coordScale
     for i in 0:(size(nf, 2) - 1)
-        
         vertices[4*i + 1] = coords[i + 1, 1]
         vertices[4*i + 2] = coords[i + 1, 2]
-        nf[1, i + 1] == 0 ? vertices[4*i + 3] = 0 : vertices[4*i + 3] = disp[nf[1, i + 1]]
-        nf[2, i + 1] == 0 ? vertices[4*i + 4] = 0 : vertices[4*i + 4] = disp[nf[2, i + 1]]
-        
+        nf[1, i + 1] == 0 ? vertices[4*i + 3] = 0 : (vertices[4*i + 3] = disp[nf[1, i + 1]])
+        nf[2, i + 1] == 0 ? vertices[4*i + 4] = 0 : (vertices[4*i + 4] = disp[nf[2, i + 1]])
     end
-
     maxDisp = 0
     for i in 0:(convert(Int32, length(vertices)/4) - 1)
         l = sqrt(vertices[4*i + 3]^2 + vertices[4*i + 4]^2)
         l > maxDisp && (maxDisp = l)
     end
 
-    a = b = 1
-    for i in 1:length(indices)
-
-        indices[i] = g_num[a, b] - 1
-        a += 1
-        if a == 4
-
-            a = 1
-            b += 1
-            
+    # Organize indices for vertices according
+    # to type of element and number of nodes per element
+    if element == "quadrilateral"
+        if nod == 4
+            for i in 1:size(g_num, 2)
+                i == 1 && (a = 1)
+                indices[a] = g_num[1, i] - 1
+                indices[a+1] = g_num[2, i] - 1
+                indices[a+2] = g_num[3, i] - 1
+                indices[a+3] = g_num[1, i] - 1
+                indices[a+4] = g_num[3, i] - 1
+                indices[a+5] = g_num[4, i] - 1
+                global a += 6
+            end
         end
-        
+    elseif element == "triangle"
+        if nod == 3
+            for i in 1:size(g_num, 2)
+                i == 1 && (a = 1)
+                indices[a] = g_num[1, i] - 1
+                indices[a+1] = g_num[2, i] - 1
+                indices[a+2] = g_num[3, i] - 1
+                a += 3
+            end
+        end
     end
-
     GLFW.Init()
     
     # Create a windowed mode window and its OpenGL context
-    window = GLFW.CreateWindow(700, 700, "OpenGL Example")
+    window = GLFW.CreateWindow(900, 900, "Displacements")
     # Make the window's context current
     GLFW.MakeContextCurrent(window)
 
@@ -255,12 +267,11 @@ function openGLSetup(nxe, nye, coords, g_num, vertexShader, fragmentShader, nodo
     glEnable(GL_DEPTH_TEST)
 
     # shaders access and setup
-    vsh = getShader(vertexShader)
-    fsh = getShader(fragmentShader)
+    vsh = graph.getShader(vertexShader)
+    fsh = graph.getShader(fragmentShader)
 
     # creating OpenGL "program" and linking shaders
-    ProgramID = ProgramSetup(vsh, fsh)
-    glUseProgram(ProgramID)
+    ProgramID, vertexShader, fragmentShader = ProgramSetup(vsh, fsh)
 
     glUniform1f(glGetUniformLocation(ProgramID, "maxDisp"), maxDisp)
 
@@ -274,21 +285,21 @@ function openGLSetup(nxe, nye, coords, g_num, vertexShader, fragmentShader, nodo
 
     # wireframe mode: GL_LINE
     # fill mode: GL_FILL
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
     glDisable(GL_LINE_SMOOTH)
-    glLineWidth(15)
+    glLineWidth(3)
 
-    return window, ProgramID
+    return window, ProgramID, vertexShader, fragmentShader
 
 end
 
-function renderLoop(steps, ProgramID, window, deformScale)
+function renderDisp(steps, ProgramID, window, deformScale, nels, vertexShader, fragmentShader)
 
     # Starts the render loop and then terminates GLFW
 
     glUniform1i(glGetUniformLocation(ProgramID, "stepsTot"), steps)
-    glUniform1i(glGetUniformLocation(ProgramID, "deformScale"), deformScale)
+    glUniform1f(glGetUniformLocation(ProgramID, "deformScale"), deformScale)
 
     mMatrix = GLfloat[
         3 0 0 0
@@ -298,32 +309,132 @@ function renderLoop(steps, ProgramID, window, deformScale)
     ]
     glUniformMatrix4fv(glGetUniformLocation(ProgramID, "model"), 1, GL_FALSE, mMatrix)
     # Starts the render loop and then terminates GLFW
-    p = 1
     # while (!GLFW.WindowShouldClose(window))
     for s in 1:steps
 
-        println("$(floor(Int32, s/steps*100))%")
-
+        s%20 == 0 && println("$(floor(Int32, s/steps*100))%")
+        s == 1 && (p = 0)
         # Set background color
-        glClearColor(0.2, 0.2, 0.6, 1)
+        glClearColor(0.2, 0.2, 0.5, 1)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         glUseProgram(ProgramID)
         if s > 0.95*steps
             
         elseif s > 0.15*steps && s < 0.9*steps
-            p += 1
+            global p += 1
         end
         glUniform1i(glGetUniformLocation(ProgramID, "stepsCurrent"), p)
-        glDrawElements(GL_TRIANGLES, 24, GL_UNSIGNED_INT, C_NULL)
-
+        #=
+        In graphical procedures, mesh is considered as a subdivision of
+        quadrilateral elements into two triangles each.
+        (n° of elements)*(2 triangles/element)*(3 vertices/triangle) = total number of vertices
+        =#
+        glDrawElements(GL_TRIANGLES, nels*2*3, GL_UNSIGNED_INT, C_NULL)
         # check and call events
         GLFW.PollEvents()
         # swap the buffers
         GLFW.SwapBuffers(window)
 
     end
+    glDeleteShader(vertexShader)
+    glDeleteShader(fragmentShader)
     GLFW.Terminate()
+
+end
+
+function renderDens(ProgramID, window, nels, vertexShader, fragmentShader)
+
+    # Starts the render loop and then terminates GLFW
+    mMatrix = GLfloat[
+        3 0 0 0
+        0 3 0 0
+        0 0 3 0
+        0 0 0 1
+    ]
+    glUniformMatrix4fv(glGetUniformLocation(ProgramID, "model"), 1, GL_FALSE, mMatrix)
+
+    while (!GLFW.WindowShouldClose(window))
+
+        # Set background color
+        glClearColor(0.1, 0.2, 0.3, 1)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        glUseProgram(ProgramID)
+        
+        #=
+        In graphical procedures, mesh is considered as a subdivision of
+        quadrilateral elements into two triangles each.
+        (n° of elements)*(2 triangles/element)*(3 vertices/triangle) = total number of vertices
+        =#
+        glDrawArrays(GL_POINT, 0, nels)
+        # check and call events
+        GLFW.PollEvents()
+        # swap the buffers
+        GLFW.SwapBuffers(window)
+
+    end
+    glDeleteShader(vertexShader)
+    glDeleteShader(fragmentShader)
+    GLFW.Terminate()
+
+end
+
+function glSetupDens(nxe, nye, coord, vertexShader, fragmentShader, nodof, dens, g_num, element)
+    
+    # Many setup steps for OpenGL
+    
+    vertices = Array{GLfloat}(undef, nxe*nye*3)
+    coord /= maximum(coord)
+
+    for i in 0:(nxe*nye - 1)
+        vertices[3*i + 1], vertices[3*i + 2] = num.centerPos(element, coord, g_num, i+1)
+        vertices[3*i + 3] = convert(Float32, dens[i + 1])
+    end
+    GLFW.Init()
+    
+    size=900
+    # Create a windowed mode window and its OpenGL context
+    window = GLFW.CreateWindow(size, size, "Resulting densities")
+    # Make the window's context current
+    GLFW.MakeContextCurrent(window)
+
+    ### generate buffers and objects ###
+
+    # Generate a vertex array object and array buffer for the data
+    vao = glGenVertexArray()
+
+    # Create virtual buffer object so data can be copied to GPU
+    vbo = glGenBuffer()
+
+    # Bind virtual objects to respective buffers to activate them
+    glBindBuffer(GL_ARRAY_BUFFER, vbo)
+    glBindVertexArray(vao)
+
+    # Copy information to respective buffer
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW)
+
+    glEnable(GL_DEPTH_TEST)
+
+    # shaders access and setup
+    vsh = graph.getShader(vertexShader)
+    fsh = graph.getShader(fragmentShader)
+
+    # creating OpenGL "program" and linking shaders
+    ProgramID, vertexShader, fragmentShader = ProgramSetup(vsh, fsh)
+
+    # position attribute
+    glVertexAttribPointer(0, nodof, GL_FLOAT, GL_FALSE, (nodof+1)*sizeof(Float32), C_NULL)
+    glEnableVertexAttribArray(0)
+
+    # density attribute
+    glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, sizeof(Float32), Ptr{Nothing}(nodof*sizeof(Float32)))
+    glEnableVertexAttribArray(1)
+
+    # glPointSize(floor(0.9*size/(nxe>nye ? nxe : nye)))
+    glPointSize(20)
+
+    return window, ProgramID, vertexShader, fragmentShader
 
 end
 

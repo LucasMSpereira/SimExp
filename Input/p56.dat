@@ -1,8 +1,9 @@
 cg_limit 200
-GPU 0
+GPU false
 element HEXA20
 type_2d 0
 nodof 3
+probType static
 nod 20
 nxe 1
 nye 3

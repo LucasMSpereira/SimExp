@@ -5,7 +5,7 @@ layout (location = 1) in vec2 disp;
 
 out vec2 dispColor;
 
-uniform int deformScale;
+uniform float deformScale;
 uniform int stepsCurrent;
 uniform int stepsTot;
 uniform mat4 model;

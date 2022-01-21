@@ -4,22 +4,23 @@ using Meshes, InOut
 
 ### This module provides mesh routines
 
-function triQuadMshData!(nxe, nye, nf, type, spacing, coords, process)
+function triQuadMshData!(nxe, nye, nf, type, spacing, coords)
     
     # Generate coords (nodeID x coordinate), g_num (nodeID x element)
     # and g_g (DOF x element) matrices from mesh
+    deltax = -convert(Float64, spacing[1]*nxe/2)
+    deltay = -convert(Float64, spacing[2]*nye/2)
+    recMesh = Meshes.CartesianGrid((nxe, nye), (deltax, deltay), spacing)
     
-    recMesh = Meshes.CartesianGrid((nxe, nye), (-0.5, -0.5), spacing)
-    
-    if type == "quad4"
+    if type == "quadrilateral"
         
-        g_num = Array{Int32}(undef, (4, nelements(recMesh)))
-        g_g = Array{Int32}(undef, (8, nelements(recMesh)))
+        g_num = Array{Int64}(undef, (4, nelements(recMesh)))
+        g_g = Array{Int64}(undef, (8, nelements(recMesh)))
         
     elseif type == "triangle"
         
-        g_num = Array{Int32}(undef, (3, 2*nelements(recMesh)))
-        g_g = Array{Int32}(undef, (6, 2*nelements(recMesh)))
+        g_num = Array{Int64}(undef, (3, 2*nelements(recMesh)))
+        g_g = Array{Int64}(undef, (6, 2*nelements(recMesh)))
         
     end
     
@@ -57,17 +58,17 @@ function triQuadMshData!(nxe, nye, nf, type, spacing, coords, process)
             
         end
         
-        if type == "quad4"
+        if type == "quadrilateral"
             
             g_num[1, elem] = floor(Int16, (elem - 1)/size(recMesh)[1]) + elem
             g_num[2, elem] = g_num[1, elem] + 1
             g_num[3, elem] = g_num[1, elem] + size(recMesh)[1] + 2
             g_num[4, elem] = g_num[3, elem] - 1
             
-            for dof in 1:4
+            for node in 1:4
                 
-                g_g[2*dof - 1, elem] = nf[1, g_num[dof, elem]]
-                g_g[2*dof, elem] = nf[2, g_num[dof, elem]]
+                g_g[2*node - 1, elem] = nf[1, g_num[node, elem]]
+                g_g[2*node, elem] = nf[2, g_num[node, elem]]
                 
             end
             
@@ -83,13 +84,13 @@ function triQuadMshData!(nxe, nye, nf, type, spacing, coords, process)
             g_num[2, 2*elem] = g_num[1, 2*elem] + size(recMesh)[1] + 2
             g_num[3, 2*elem] = g_num[2, 2*elem] - 1
             
-            for dof in 1:3
+            for node in 1:3
                 
-                g_g[2*dof - 1, 2*elem - 1] = nf[1, g_num[dof, 2*elem - 1]]
-                g_g[2*dof, 2*elem - 1] = nf[2, g_num[dof, 2*elem - 1]]
+                g_g[2*node - 1, 2*elem - 1] = nf[1, g_num[node, 2*elem - 1]]
+                g_g[2*node, 2*elem - 1] = nf[2, g_num[node, 2*elem - 1]]
                 
-                g_g[2*dof - 1, 2*elem] = nf[1, g_num[dof, 2*elem]]
-                g_g[2*dof, 2*elem] = nf[2, g_num[dof, 2*elem]]
+                g_g[2*node - 1, 2*elem] = nf[1, g_num[node, 2*elem]]
+                g_g[2*node, 2*elem] = nf[2, g_num[node, 2*elem]]
                 
             end
             
@@ -97,38 +98,14 @@ function triQuadMshData!(nxe, nye, nf, type, spacing, coords, process)
         
     end
 
-
-    write(process, "\ncoords:\n")
-    for i in 1:size(coords, 1)
-
-        write(process, "$(coords[i, :])\n")
-  
-    end
-
-    write(process, "\ng_num:\n")
-    for i in 1:size(g_num, 1)
-
-        write(process, "$(g_num[i, :])\n")
-  
-    end
-
-    write(process, "\ng_g:\n")
-    for i in 1:size(g_g, 1)
-
-        write(process, "$(g_g[i, :])\n")
-  
-    end
-    
     return coords, g_num, g_g
     
 end
 
-function RctMshSize(nxe, nye, element, process)
+function RctMshSize(nxe, nye, element)
 
     # 'Rectangular mesh size' returns nels (number of elements) and
     # nn (number of nodes) in a rectangular mesh
-
-    write(process, "\nmsh.RctMshSize\n")
 
     if element == "quadrilateral"
 
@@ -142,31 +119,26 @@ function RctMshSize(nxe, nye, element, process)
 
     nn = (nxe + 1)*(nye + 1)
 
-    write(process, "\nNumber of elements = $(nels)\n")
-    write(process, "\nNumber of nodes = $(nn)\n")
-        
     return nels, nn
     
 end
 
-function TriQuadMsh(element, x_coords, y_coords, dir, k, nf, process)
+function TriQuadMsh(element, x_coords, y_coords, dir, k, nf)
 
     # Returns nodal coordinates, IDs and steering vectors for quadrilateral or triangular mesh
     # This routine is equivalent to "geom_rect" from the original FORTRAN code
 
-    write(process, "\nmsh.mshData\n")
-    
-    coords = Array{Float32}(undef, (length(x_coords) * length(y_coords), 2))
+    coords = Array{Float64}(undef, (length(x_coords) * length(y_coords), 2))
     
     if element == "quadrilateral"
 
-        g_num = Array{Int32}(undef, (4, (length(x_coords) - 1)*(length(y_coords) - 1)))
-        g_g = Array{Int32}(undef, (8, (length(x_coords) - 1)*(length(y_coords) - 1)))
+        g_num = Array{Int64}(undef, (4, (length(x_coords) - 1)*(length(y_coords) - 1)))
+        g_g = Array{Int64}(undef, (8, (length(x_coords) - 1)*(length(y_coords) - 1)))
 
     else
 
-        g_num = Array{Int32}(undef, (3, 2*(length(x_coords) - 1)*(length(y_coords) - 1)))
-        g_g = Array{Int32}(undef, (6, 2*(length(x_coords) - 1)*(length(y_coords) - 1)))
+        g_num = Array{Int64}(undef, (3, 2*(length(x_coords) - 1)*(length(y_coords) - 1)))
+        g_g = Array{Int64}(undef, (6, 2*(length(x_coords) - 1)*(length(y_coords) - 1)))
         
     end       
     
@@ -182,8 +154,6 @@ function TriQuadMsh(element, x_coords, y_coords, dir, k, nf, process)
 
     else
 
-        write(process, "\nmsd.meshData: Invalid 'dir'\n")
-        
     end
 
     for i in 1:(length(secondary))
@@ -284,37 +254,14 @@ function TriQuadMsh(element, x_coords, y_coords, dir, k, nf, process)
 
     end
 
-    write(process, "\ng_num:\n")
-    for i in 1:size(g_num, 1)
-
-        write(process, "$(g_num[i, :])\n")
-  
-    end
-
-    write(process, "\ng_g:\n")
-    for i in 1:size(g_g, 1)
-
-        write(process, "$(g_g[i, :])\n")
-  
-    end
-
-    write(process, "\ncoords:\n")
-    for i in 1:size(coords, 1)
-
-        write(process, "$(coords[i, :])\n")
-  
-    end
-
     return coords, g_g, g_num
 
 end
 
-function hexaSize(nxe, nye, nze, process)
+function hexaSize(nxe, nye, nze)
 
     # calculate number of nodes in 20-node hexahedral mesh.
     # suppose ordered xyz_coord vectors
-
-    write(process, "\nmsh.hexaSize\n")
 
     x = (1 + nye)*(1 + nze)*nxe
     y = (1 + nxe)*(1 + nze)*nye
@@ -326,11 +273,9 @@ function hexaSize(nxe, nye, nze, process)
     
 end
 
-function hexaMesh(x_coords, y_coords, z_coords, nf, nod, nxe, nye, nze, nn, process)
+function hexaMesh(x_coords, y_coords, z_coords, nf, nod, nxe, nye, nze, nn)
 
     # Returns nodal coordinates, IDs and steering vectors for hexahedra ("bricks")
-
-    write(process, "\nmsh.hexaMesh\n")     
 
     if nod == 8
     end
@@ -340,8 +285,8 @@ function hexaMesh(x_coords, y_coords, z_coords, nf, nod, nxe, nye, nze, nn, proc
 
     if nod == 20
         
-        g_num = Array{Int32}(undef, ((nod, ((length(x_coords) - 1)*(length(y_coords) - 1))*(length(z_coords) - 1))))
-        g_g = Array{Int32}(undef, (3*nod, (((length(x_coords) - 1)*(length(y_coords) - 1))*(length(z_coords) - 1)))) 
+        g_num = Array{Int64}(undef, ((nod, ((length(x_coords) - 1)*(length(y_coords) - 1))*(length(z_coords) - 1))))
+        g_g = Array{Int64}(undef, (3*nod, (((length(x_coords) - 1)*(length(y_coords) - 1))*(length(z_coords) - 1)))) 
         coords = fill(7777.123, (nn, 3))
         
         # placing all VERTICES in coords
@@ -483,27 +428,6 @@ function hexaMesh(x_coords, y_coords, z_coords, nf, nod, nxe, nye, nze, nn, proc
                 global g_g[a + 2, i] = nf[3, g_num[j, i]]
                 
             end
-            
-        end
-        
-        write(process, "\ng_num:\n")
-        for i in 1:size(g_num, 1)
-            
-            write(process, "$(g_num[i, :])\n")
-            
-        end
-        
-        write(process, "\ng_g:\n")
-        for i in 1:size(g_g, 1)
-            
-            write(process, "$(g_g[i, :])\n")
-            
-        end
-        
-        write(process, "\ncoords:\n")
-        for i in 1:size(coords, 1)
-            
-            write(process, "$(coords[i, :])\n")
             
         end
         

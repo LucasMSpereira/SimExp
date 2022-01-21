@@ -1,0 +1,54 @@
+cg_limit 0
+GPU false
+type_2d stress
+element quadrilateral
+nxe 60
+nye 20
+spacing 1 1
+cg_tol 0
+nip 4
+np_types 1
+nprops 2
+1.0
+0.3
+nodof 2
+nod 4
+nr 22
+nf
+1 0 1
+61 1 0
+62 0 1
+123 0 1
+184 0 1
+245 0 1
+306 0 1
+367 0 1
+428 0 1
+489 0 1
+550 0 1
+611 0 1
+672 0 1
+733 0 1
+794 0 1
+855 0 1
+916 0 1
+977 0 1
+1038 0 1
+1099 0 1
+1160 0 1
+1221 0 1
+loaded_nodes 1
+disp
+1221 0 -1
+fixed_freedoms 0
+probType ssstaticSens
+nmodes 0
+etol 0
+penalty 0
+eigenvec 0
+selfWeight false
+changeSens 0
+rmin 2
+SIMPpenalty 3
+volfrac 0.5
+filter sens
